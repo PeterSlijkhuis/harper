@@ -9,7 +9,7 @@ use hashbrown::HashMap;
 use levenshtein_automata::{DFA, LevenshteinAutomatonBuilder};
 
 use super::{CanonicalWordId, Dictionary, FuzzyMatchResult, MutableDictionary};
-use crate::{CharString, CharStringExt, DictWordMetadata};
+use crate::{CharString, CharStringExt, DictWordMetadata, Language};
 
 /// An immutable dictionary allowing for very fast spellchecking.
 ///
@@ -27,6 +27,20 @@ const TRANSPOSITION_COST_ONE: bool = true;
 
 static DICT: LazyLock<Arc<FstDictionary>> =
     LazyLock::new(|| Arc::new((*MutableDictionary::curated()).clone().into()));
+
+/// Flat word lists have no affixes or word metadata, so the annotation set is empty.
+const NO_ANNOTATIONS: &str = r#"{"affixes":{},"properties":{}}"#;
+
+static DICT_NL: LazyLock<Arc<FstDictionary>> =
+    LazyLock::new(|| flat_dict(super::dictionary::CURATED_DICT_NL_STR));
+static DICT_ES: LazyLock<Arc<FstDictionary>> =
+    LazyLock::new(|| flat_dict(super::dictionary::CURATED_DICT_ES_STR));
+
+fn flat_dict(words: &str) -> Arc<FstDictionary> {
+    let dict = MutableDictionary::from_rune_files(words, NO_ANNOTATIONS)
+        .expect("bundled word list is valid");
+    Arc::new(dict.into())
+}
 
 thread_local! {
     // Builders are computationally expensive and do not depend on the word, so we store a
@@ -50,6 +64,15 @@ impl FstDictionary {
     /// in the Harper binary.
     pub fn curated() -> Arc<Self> {
         (*DICT).clone()
+    }
+
+    /// The curated dictionary for `language`. Only English carries word metadata.
+    pub fn curated_for(language: Language) -> Arc<Self> {
+        match language {
+            Language::English => Self::curated(),
+            Language::Dutch => DICT_NL.clone(),
+            Language::Spanish => DICT_ES.clone(),
+        }
     }
 
     /// Construct a new [`FstDictionary`] using a wordlist as a source.
@@ -256,6 +279,22 @@ impl Dictionary for FstDictionary {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn language_dictionaries_load() {
+        use crate::Language;
+
+        let nl = FstDictionary::curated_for(Language::Dutch);
+        let es = FstDictionary::curated_for(Language::Spanish);
+        let en = FstDictionary::curated_for(Language::English);
+
+        assert!(nl.contains_word_str("fietsenstalling"));
+        assert!(!nl.contains_word_str("fietsnstalling"));
+        assert!(es.contains_word_str("cantábamos"));
+        assert!(!es.contains_word_str("cantabamoz"));
+        assert!(en.contains_word_str("bicycle"));
+        assert!(!en.contains_word_str("fietsenstalling"));
+    }
+
     use itertools::Itertools;
 
     use crate::CharStringExt;

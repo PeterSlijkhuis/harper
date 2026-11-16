@@ -6,6 +6,8 @@ use super::FuzzyMatchResult;
 use crate::DictWordMetadata;
 
 pub static CURATED_DICT_STR: &str = include_str!("../../dictionary.dict");
+pub static CURATED_DICT_NL_STR: &str = include_str!("../../dictionary_nl.dict");
+pub static CURATED_DICT_ES_STR: &str = include_str!("../../dictionary_es.dict");
 pub static ANNOTATIONS_STR: &str = include_str!("../../annotations.json");
 
 /// An in-memory database that contains everything necessary to parse and analyze English text.
