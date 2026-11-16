@@ -1,7 +1,9 @@
 //! This module implements rudimentary, dictionary-based English language detection.
 
-use crate::spell::Dictionary;
-use crate::{Document, Token, TokenKind};
+use strum::IntoEnumIterator;
+
+use crate::spell::{Dictionary, FstDictionary};
+use crate::{Document, Language, Token, TokenKind};
 
 /// Check if the contents of the document are likely intended to represent
 /// English.
@@ -49,6 +51,54 @@ pub fn is_likely_english(toks: &[Token], source: &[char], dict: &impl Dictionary
     }
 
     true
+}
+
+const MIN_WORDS_TO_DETECT: usize = 3;
+
+/// Fraction of words in `toks` that `dict` knows. `0.0` when there are no words.
+fn valid_word_ratio(toks: &[Token], source: &[char], dict: &impl Dictionary) -> f64 {
+    let (mut total, mut valid) = (0u32, 0u32);
+    for token in toks.iter().filter(|t| t.kind.is_word()) {
+        total += 1;
+        valid += dict.contains_word(token.get_ch(source)) as u32;
+    }
+    if total == 0 {
+        0.0
+    } else {
+        valid as f64 / total as f64
+    }
+}
+
+/// Guess which supported language the given tokens are written in.
+///
+/// Every language whose dictionary passes [`is_likely_english`]'s heuristics is a candidate,
+/// and the one that knows the largest share of the words wins. Returns `None` for code, other
+/// languages and text too short to judge. Loads all three dictionaries on first use.
+pub fn detect_language(toks: &[Token], source: &[char]) -> Option<Language> {
+    // One or two words say nothing: "ja" is valid Dutch, Spanish-looking and German.
+    if toks.iter().filter(|t| t.kind.is_word()).count() < MIN_WORDS_TO_DETECT {
+        return None;
+    }
+
+    let mut best: Option<(Language, f64)> = None;
+    for lang in Language::iter() {
+        let dict = FstDictionary::curated_for(lang);
+        if !is_likely_english(toks, source, &dict) {
+            continue;
+        }
+        let ratio = valid_word_ratio(toks, source, &dict);
+        // Strictly greater: on a tie the earlier language wins, so English beats the
+        // others for the English loanwords they also contain.
+        if best.is_none_or(|(_, r)| ratio > r) {
+            best = Some((lang, ratio));
+        }
+    }
+    best.map(|(lang, _)| lang)
+}
+
+/// [`detect_language`] for a whole document.
+pub fn detect_doc_language(doc: &Document) -> Option<Language> {
+    detect_language(doc.get_tokens(), doc.get_source())
 }
 
 #[cfg(test)]
@@ -143,5 +193,32 @@ def fibIter(n):
     #[test]
     fn english_motto() {
         assert_english("I have a simple motto in life");
+    }
+
+    #[test]
+    fn detects_supported_languages() {
+        use super::detect_doc_language;
+        use crate::Language;
+
+        let detect = |text: &str| {
+            let dict = FstDictionary::curated();
+            detect_doc_language(&Document::new_plain_english(text, &dict))
+        };
+
+        assert_eq!(
+            detect("This is perfectly valid English, evn if it has a cople typos."),
+            Some(Language::English)
+        );
+        assert_eq!(
+            detect("Dit is een Nederlandse zin, en hij is helemaal correct geschreven."),
+            Some(Language::Dutch)
+        );
+        assert_eq!(
+            detect("Esto es español y debería ser detectado correctamente por Harper."),
+            Some(Language::Spanish)
+        );
+        assert_eq!(detect("#! /bin/bash"), None);
+        assert_eq!(detect("The quick brown fox"), Some(Language::English));
+        assert_eq!(detect("Ja"), None);
     }
 }
