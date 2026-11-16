@@ -2,11 +2,12 @@ name: Chrome Plugin
 
 on:
   push:
-    branches: ["master"]
+    branches: ["master", "main", "development"]
     tags: ["v*"]
   pull_request:
     branches: ["master"]
   merge_group:
+  workflow_dispatch:
 
 # Cancel superseded runs when a PR gets new commits, freeing runners for other
 # jobs. Non-PR runs get a unique group, so they are never queued or cancelled.
@@ -33,6 +34,9 @@ jobs:
         run: cargo binstall wasm-pack --force --no-confirm
       - name: Build Chrome Plugin
         run: just build-chrome-plugin
+      - name: Type-check the extension
+        run: pnpm check
+        working-directory: packages/chrome-plugin
       - name: Build Firefox Plugin
         run: just build-firefox-plugin
       - name: Upload Chrome extension
