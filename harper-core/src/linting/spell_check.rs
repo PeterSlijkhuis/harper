@@ -5,7 +5,7 @@ use lru::LruCache;
 use smallvec::ToSmallVec;
 
 use crate::{
-    CharString, CharStringExt, Dialect, TokenStringExt,
+    CharString, CharStringExt, Dialect, Language, TokenStringExt,
     document::Document,
     expr::{Filter, LongestMatchOf, SequenceExpr},
     linting::{
@@ -13,7 +13,7 @@ use crate::{
         proper_noun_capitalization_linters::proper_nouns_expr,
     },
     remove_lints_overlapping_expr,
-    spell::{Dictionary, suggest_correct_spelling},
+    spell::{Dictionary, is_dutch_compound, suggest_correct_spelling},
 };
 
 pub struct SpellCheck<T>
@@ -23,6 +23,7 @@ where
     dictionary: T,
     suggestion_cache: LruCache<CharString, Vec<CharString>>,
     dialect: Dialect,
+    language: Language,
     proper_nouns: LongestMatchOf,
 }
 
@@ -32,8 +33,15 @@ impl<T: Dictionary> SpellCheck<T> {
             dictionary,
             suggestion_cache: LruCache::new(NonZero::new(10000).unwrap()),
             dialect,
+            language: Language::English,
             proper_nouns: proper_nouns_expr(),
         }
+    }
+
+    /// Set the language the dictionary is for. Dutch accepts dictionary compounds.
+    pub fn with_language(mut self, language: Language) -> Self {
+        self.language = language;
+        self
     }
 
     const MAX_SUGGESTIONS: usize = 3;
@@ -108,6 +116,12 @@ impl<T: Dictionary> Linter for SpellCheck<T> {
             let word_chars = document.get_span_content(&word.span);
 
             if is_informal_laughter(word_chars) {
+                continue;
+            }
+
+            if self.language == Language::Dutch
+                && is_dutch_compound(&self.dictionary, word_chars.to_lower().as_ref())
+            {
                 continue;
             }
 
@@ -216,6 +230,21 @@ mod tests {
         SpellCheck<Arc<FstDictionary>>,
         SpellCheck::new(FstDictionary::curated(), Dialect::American)
     );
+
+    fn dutch_lint_count(text: &str) -> usize {
+        let dict = FstDictionary::curated_for(crate::Language::Dutch);
+        let doc = Document::new_plain_english(text, &dict);
+        SpellCheck::new(dict, Dialect::American)
+            .with_language(crate::Language::Dutch)
+            .lint(&doc)
+            .len()
+    }
+
+    #[test]
+    fn dutch_accepts_compounds_and_flags_typos() {
+        assert_eq!(dutch_lint_count("De fietsenstalling is dicht."), 0);
+        assert_eq!(dutch_lint_count("De fietsnstalling is dicht."), 1);
+    }
 
     // Capitalization tests
 

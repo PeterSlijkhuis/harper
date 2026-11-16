@@ -5,6 +5,7 @@ use itertools::Itertools;
 
 use crate::{CharString, CharStringExt, DictWordMetadata};
 
+pub use self::compound::is_dutch_compound;
 pub use self::dictionary::Dictionary;
 pub use self::fst_dictionary::FstDictionary;
 pub use self::merged_dictionary::MergedDictionary;
@@ -12,6 +13,7 @@ pub use self::mutable_dictionary::MutableDictionary;
 pub use self::trie_dictionary::TrieDictionary;
 pub use self::word_id::{CanonicalWordId, CaseFoldedWordId};
 
+mod compound;
 mod dictionary;
 mod fst_dictionary;
 mod merged_dictionary;
