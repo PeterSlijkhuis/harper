@@ -1105,6 +1105,17 @@ impl LintGroup {
         group
     }
 
+    /// [`Self::new_curated_for`] with all config values cleared out.
+    pub fn new_curated_for_empty_config(
+        dictionary: Arc<impl Dictionary + 'static>,
+        dialect: Dialect,
+        language: Language,
+    ) -> Self {
+        let mut group = Self::new_curated_for(dictionary, dialect, language);
+        group.config.clear();
+        group
+    }
+
     pub fn organized_lints(&mut self, document: &Document) -> BTreeMap<String, Vec<Lint>> {
         let mut results = BTreeMap::new();
 

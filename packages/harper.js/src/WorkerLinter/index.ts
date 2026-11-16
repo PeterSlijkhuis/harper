@@ -1,4 +1,4 @@
-import type { Dialect, Lint, Suggestion } from 'harper-wasm';
+import type { Dialect, Lint, NaturalLanguage, Suggestion } from 'harper-wasm';
 import { type BinaryModule, resolveWasmGlueFlavor } from '../BinaryModule';
 import type Linter from '../Linter';
 import type { LinterInit, WeirpackTestFailures } from '../Linter';
@@ -22,6 +22,7 @@ export default class WorkerLinter implements Linter {
 	private binary: BinaryModule;
 	private serializer: Serializer;
 	private dialect?: Dialect;
+	private language?: NaturalLanguage;
 	private worker: Worker;
 	private requestQueue: RequestItem[];
 	private working = true;
@@ -31,6 +32,7 @@ export default class WorkerLinter implements Linter {
 		this.binary = init.binary;
 		this.serializer = new Serializer(this.binary);
 		this.dialect = init.dialect;
+		this.language = init.language;
 		this.worker = new Worker();
 		this.requestQueue = [];
 
@@ -38,7 +40,12 @@ export default class WorkerLinter implements Linter {
 		this.worker.onmessage = () => {
 			this.setupMainEventListeners();
 
-			this.worker.postMessage([this.binary.url, this.dialect, resolveWasmGlueFlavor(this.binary)]);
+			this.worker.postMessage([
+				this.binary.url,
+				this.dialect,
+				resolveWasmGlueFlavor(this.binary),
+				this.language,
+			]);
 
 			this.working = false;
 			this.submitRemainingRequests();
@@ -200,6 +207,18 @@ export default class WorkerLinter implements Linter {
 
 	setDialect(dialect: Dialect): Promise<void> {
 		return this.rpc('setDialect', [dialect]);
+	}
+
+	getLanguage(): Promise<NaturalLanguage> {
+		return this.rpc('getLanguage', []);
+	}
+
+	setLanguage(language: NaturalLanguage): Promise<void> {
+		return this.rpc('setLanguage', [language]);
+	}
+
+	detectLanguage(text: string): Promise<NaturalLanguage | undefined> {
+		return this.rpc('detectLanguage', [text]);
 	}
 
 	summarizeStats(start?: bigint, end?: bigint): Promise<any> {

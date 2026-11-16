@@ -3,6 +3,7 @@ import {
 	type Dialect,
 	type LintConfig,
 	LocalLinter,
+	NaturalLanguage,
 	unpackWeirpackBytes,
 } from 'harper.js';
 import { type UnpackedLintGroups, unpackLint } from 'lint-framework';
@@ -21,6 +22,8 @@ import {
 	type GetDelayResponse,
 	type GetDialectRequest,
 	type GetDialectResponse,
+	type GetLanguageRequest,
+	type GetLanguageResponse,
 	type GetDomainStatusRequest,
 	type GetDomainStatusResponse,
 	type GetEnabledDomainsResponse,
@@ -50,6 +53,7 @@ import {
 	type SetDefaultStatusRequest,
 	type SetDelayRequest,
 	type SetDialectRequest,
+	type SetLanguageRequest,
 	type SetDomainStatusRequest,
 	type SetHotkeyRequest,
 	type SetIsolateEnglishRequest,
@@ -110,6 +114,7 @@ let linter: LocalLinter;
 const WEIRPACKS_KEY = 'weirpacks';
 const linterStorageKeys = [
 	'dialect',
+	'language',
 	'ignoredLints',
 	'lintConfig',
 	WEIRPACKS_KEY,
@@ -238,6 +243,10 @@ function handleRequest(message: Request, sender?: chrome.runtime.MessageSender):
 			return handleSetDialect(message);
 		case 'getDialect':
 			return handleGetDialect(message);
+		case 'setLanguage':
+			return handleSetLanguage(message);
+		case 'getLanguage':
+			return handleGetLanguage(message);
 		case 'getIsolateEnglish':
 			return handleGetIsolateEnglish();
 		case 'setIsolateEnglish':
@@ -410,6 +419,16 @@ async function handleSetDialect(req: SetDialectRequest): Promise<UnitResponse> {
 	await setDialect(req.dialect);
 
 	return createUnitResponse();
+}
+
+async function handleSetLanguage(req: SetLanguageRequest): Promise<UnitResponse> {
+	await setLanguage(req.language);
+
+	return createUnitResponse();
+}
+
+async function handleGetLanguage(_req: GetLanguageRequest): Promise<GetLanguageResponse> {
+	return { kind: 'getLanguage', language: await getLanguage() };
 }
 
 async function handleGetDialect(_req: GetDialectRequest): Promise<GetDialectResponse> {
@@ -721,6 +740,17 @@ async function getDialect(): Promise<Dialect> {
 	return resp.dialect;
 }
 
+async function getLanguage(): Promise<NaturalLanguage> {
+	const resp = await chrome.storage.local.get({ language: NaturalLanguage.English });
+	return resp.language;
+}
+
+async function setLanguage(language: NaturalLanguage) {
+	linterHasPersistedState = true;
+	await chrome.storage.local.set({ language });
+	await initializeLinter(await getDialect());
+}
+
 async function getIsolateEnglish(): Promise<boolean> {
 	const resp = await chrome.storage.local.get({ isolateEnglish: false });
 	return resp.isolateEnglish === true;
@@ -760,6 +790,7 @@ async function initializeLinter(dialect: Dialect) {
 	linter = new LocalLinter({
 		binary: createBinaryModuleFromUrl(chrome.runtime.getURL('./wasm/harper_wasm_bg.wasm')),
 		dialect,
+		language: await getLanguage(),
 	});
 
 	await Promise.all([

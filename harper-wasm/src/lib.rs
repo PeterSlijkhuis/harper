@@ -8,7 +8,7 @@ use std::convert::Into;
 use std::io::Cursor;
 use std::sync::Arc;
 
-use harper_core::language_detection::is_doc_likely_english;
+use harper_core::language_detection::{detect_doc_language, is_doc_likely_english};
 use harper_core::linting::{HumanReadableStructuredConfig, StructuredConfig};
 use harper_core::linting::{LintGroup, Linter as _};
 use harper_core::parsers::{IsolateEnglish, Markdown, Mask, OopsAllHeadings, Parser, PlainEnglish};
@@ -107,6 +107,36 @@ impl From<Dialect> for harper_core::Dialect {
     }
 }
 
+/// The natural language of the text being linted. Not to be confused with [`Language`], which
+/// selects the markup parser.
+#[wasm_bindgen]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NaturalLanguage {
+    English,
+    Dutch,
+    Spanish,
+}
+
+impl From<NaturalLanguage> for harper_core::Language {
+    fn from(language: NaturalLanguage) -> Self {
+        match language {
+            NaturalLanguage::English => harper_core::Language::English,
+            NaturalLanguage::Dutch => harper_core::Language::Dutch,
+            NaturalLanguage::Spanish => harper_core::Language::Spanish,
+        }
+    }
+}
+
+impl From<harper_core::Language> for NaturalLanguage {
+    fn from(language: harper_core::Language) -> Self {
+        match language {
+            harper_core::Language::English => NaturalLanguage::English,
+            harper_core::Language::Dutch => NaturalLanguage::Dutch,
+            harper_core::Language::Spanish => NaturalLanguage::Spanish,
+        }
+    }
+}
+
 #[wasm_bindgen]
 pub struct Linter {
     lint_group: LintGroup,
@@ -118,6 +148,7 @@ pub struct Linter {
     weirpack_dictionaries: Vec<Arc<MutableDictionary>>,
     ignored_lints: IgnoredLints,
     dialect: Dialect,
+    language: NaturalLanguage,
     stats: Stats,
 }
 
@@ -133,8 +164,14 @@ impl Linter {
     /// Note that this can mean constructing the curated dictionary, which is the most expensive operation
     /// in Harper.
     pub fn new(dialect: Dialect) -> Self {
-        let dictionary = Self::construct_merged_dict(&[Arc::new(MutableDictionary::default())]);
-        let lint_group = LintGroup::new_curated_empty_config(dictionary.clone(), dialect.into());
+        let language = NaturalLanguage::English;
+        let dictionary =
+            Self::construct_merged_dict(language, &[Arc::new(MutableDictionary::default())]);
+        let lint_group = LintGroup::new_curated_for_empty_config(
+            dictionary.clone(),
+            dialect.into(),
+            language.into(),
+        );
 
         Self {
             lint_group,
@@ -143,6 +180,7 @@ impl Linter {
             dictionary,
             ignored_lints: IgnoredLints::default(),
             dialect,
+            language,
             stats: Stats::default(),
         }
     }
@@ -155,26 +193,53 @@ impl Linter {
         let mut constituent_dictionaries = vec![Arc::new(self.user_dictionary.clone())];
         constituent_dictionaries.extend(self.weirpack_dictionaries.iter().cloned());
 
-        self.dictionary = Self::construct_merged_dict(&constituent_dictionaries);
+        self.dictionary = Self::construct_merged_dict(self.language, &constituent_dictionaries);
 
-        self.lint_group =
-            LintGroup::new_curated_empty_config(self.dictionary.clone(), self.dialect.into());
+        self.lint_group = LintGroup::new_curated_for_empty_config(
+            self.dictionary.clone(),
+            self.dialect.into(),
+            self.language.into(),
+        );
 
         self.lint_group.config.merge_from(lint_config);
     }
 
     /// Construct the actual dictionary to be used for linting and parsing from the curated dictionary
     /// and any other runtime-provided dictionaries.
-    fn construct_merged_dict(dicts: &[Arc<impl Dictionary + 'static>]) -> Arc<MergedDictionary> {
+    fn construct_merged_dict(
+        language: NaturalLanguage,
+        dicts: &[Arc<impl Dictionary + 'static>],
+    ) -> Arc<MergedDictionary> {
         let mut lint_dict = MergedDictionary::new();
 
-        lint_dict.add_dictionary(FstDictionary::curated());
+        lint_dict.add_dictionary(FstDictionary::curated_for(language.into()));
 
         for dict in dicts {
             lint_dict.add_dictionary(Arc::new(dict.clone()));
         }
 
         Arc::new(lint_dict)
+    }
+
+    /// Switch the natural language to lint. Keeps the user dictionary, lint configuration and
+    /// ignored lints, but clears linter caches.
+    pub fn set_language(&mut self, language: NaturalLanguage) {
+        if self.language != language {
+            self.language = language;
+            self.synchronize_lint_dict();
+        }
+    }
+
+    /// Get the natural language this linter lints.
+    pub fn get_language(&self) -> NaturalLanguage {
+        self.language
+    }
+
+    /// Guess whether a plain string is English, Dutch or Spanish. `None` if it is none of these
+    /// or too short to tell. Loads all three dictionaries on first use.
+    pub fn detect_language(&self, text: String) -> Option<NaturalLanguage> {
+        let document = Document::new_plain_english(&text, &self.dictionary);
+        detect_doc_language(&document).map(Into::into)
     }
 
     /// Helper method to quickly check if a plain string is likely intended to be English

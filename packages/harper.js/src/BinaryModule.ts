@@ -1,5 +1,10 @@
 import * as defaultGlue from 'harper-wasm';
-import { Dialect, type InitInput, type Linter as WasmLinter } from 'harper-wasm';
+import {
+	Dialect,
+	type InitInput,
+	type Linter as WasmLinter,
+	type NaturalLanguage,
+} from 'harper-wasm';
 import * as fullGlue from 'harper-wasm/harper_wasm.js';
 
 import LazyPromise from 'p-lazy';
@@ -152,9 +157,13 @@ export class BinaryModuleImpl {
 }
 
 export class SuperBinaryModule extends BinaryModuleImpl {
-	async createLinter(dialect?: Dialect): Promise<WasmLinter> {
+	async createLinter(dialect?: Dialect, language?: NaturalLanguage): Promise<WasmLinter> {
 		const exported = await this.getBinaryModule();
-		return exported.Linter.new(dialect ?? Dialect.American);
+		const linter: WasmLinter = exported.Linter.new(dialect ?? Dialect.American);
+		if (language !== undefined) {
+			linter.set_language(language);
+		}
+		return linter;
 	}
 
 	async getBinaryModule(): Promise<any> {
