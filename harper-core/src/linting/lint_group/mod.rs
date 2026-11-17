@@ -378,7 +378,7 @@ use crate::{
         {ExprLinter, HtmlDescriptionLinter, Lint, Linter},
     },
     spell::Dictionary,
-    {Dialect, Document, Span, TokenStringExt},
+    {Dialect, Document, Language, Span, TokenStringExt},
 };
 
 pub use flat_config::FlatConfig;
@@ -1055,12 +1055,63 @@ impl LintGroup {
         out.with_lint_config(StructuredConfig::curated().to_flat_config().unwrap())
     }
 
+    /// Create a curated group for `language`.
+    ///
+    /// Harper only has grammar rules for English. Other languages get the linters that
+    /// make no assumptions about English words or word metadata. Notably absent is
+    /// `SentenceCapitalization`, which needs part-of-speech data the nl/es word lists lack.
+    pub fn new_curated_for(
+        dictionary: Arc<impl Dictionary + 'static>,
+        dialect: Dialect,
+        language: Language,
+    ) -> Self {
+        if language == Language::English {
+            return Self::new_curated(dictionary, dialect);
+        }
+
+        let mut out = Self::empty();
+
+        out.add(
+            "SpellCheck",
+            SpellCheck::new(dictionary.clone(), dialect).with_language(language),
+        );
+        let may_repeat: &[&str] = match language {
+            Language::Dutch => &["dat", "had", "die", "wat", "was"],
+            _ => &["que"],
+        };
+        out.add(
+            "RepeatedWords",
+            RepeatedWords::default().allowing(may_repeat),
+        );
+        out.add("Spaces", Spaces);
+        out.add("UnclosedQuotes", UnclosedQuotes);
+        out.add("QuoteSpacing", QuoteSpacing::default());
+        out.add("EllipsisLength", EllipsisLength);
+        out.add("UseEllipsisCharacter", UseEllipsisCharacter);
+        out.add("LongSentences", LongSentences);
+        out.add_chunk_expr_linter("TransposedSpace", TransposedSpace::new(dictionary));
+
+        out.set_all_rules_to(Some(true));
+        out
+    }
+
     /// Create a new curated group with all config values cleared out.
     pub fn new_curated_empty_config(
         dictionary: Arc<impl Dictionary + 'static>,
         dialect: Dialect,
     ) -> Self {
         let mut group = Self::new_curated(dictionary, dialect);
+        group.config.clear();
+        group
+    }
+
+    /// [`Self::new_curated_for`] with all config values cleared out.
+    pub fn new_curated_for_empty_config(
+        dictionary: Arc<impl Dictionary + 'static>,
+        dialect: Dialect,
+        language: Language,
+    ) -> Self {
+        let mut group = Self::new_curated_for(dictionary, dialect, language);
         group.config.clear();
         group
     }
@@ -1181,6 +1232,42 @@ impl Linter for LintGroup {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn dutch_group_flags_typos_and_stays_quiet_on_clean_text() {
+        use crate::{Language, spell::FstDictionary};
+
+        let dict = FstDictionary::curated_for(Language::Dutch);
+        let mut group =
+            LintGroup::new_curated_for(dict.clone(), Dialect::American, Language::Dutch);
+
+        let clean = Document::new_plain_english(
+            "Ik ga morgen met de fiets naar het ziekenhuis. De fietsenstalling is dicht, dus ik wacht. Hij weet dat dat zo is, en zij zijn blij met de ijsberen.",
+            &dict,
+        );
+        assert_eq!(group.lint(&clean), vec![]);
+
+        let typo = Document::new_plain_english("Ik ga morgen naar het ziekenhuiz.", &dict);
+        assert_eq!(group.lint(&typo).len(), 1);
+    }
+
+    #[test]
+    fn spanish_group_flags_typos_and_stays_quiet_on_clean_text() {
+        use crate::{Language, spell::FstDictionary};
+
+        let dict = FstDictionary::curated_for(Language::Spanish);
+        let mut group =
+            LintGroup::new_curated_for(dict.clone(), Dialect::American, Language::Spanish);
+
+        let clean = Document::new_plain_english(
+            "¿Qué quieres hacer mañana? Vamos al mercado, y después cantábamos en la plaza.",
+            &dict,
+        );
+        assert_eq!(group.lint(&clean), vec![]);
+
+        let typo = Document::new_plain_english("Vamos al mercadoo mañana.", &dict);
+        assert_eq!(group.lint(&typo).len(), 1);
+    }
+
     use std::sync::Arc;
 
     use super::LintGroup;

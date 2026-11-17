@@ -1,4 +1,10 @@
-import type { Dialect, Lint, Suggestion, Linter as WasmLinter } from 'harper-wasm';
+import type {
+	Dialect,
+	Lint,
+	NaturalLanguage,
+	Suggestion,
+	Linter as WasmLinter,
+} from 'harper-wasm';
 import { Language } from 'harper-wasm';
 import LazyPromise from 'p-lazy';
 import type { SuperBinaryModule } from './BinaryModule';
@@ -44,13 +50,13 @@ export default class LocalLinter implements Linter {
 	constructor(init: LinterInit) {
 		this.binary = init.binary as SuperBinaryModule;
 		this.binary.setup();
-		this.inner = this.createInner(init.dialect);
+		this.inner = this.createInner(init.dialect, init.language);
 	}
 
-	private createInner(dialect?: Dialect): Promise<WasmLinter> {
+	private createInner(dialect?: Dialect, language?: NaturalLanguage): Promise<WasmLinter> {
 		return LazyPromise.from(async () => {
 			await this.binary.setup();
-			return this.binary.createLinter(dialect);
+			return this.binary.createLinter(dialect, language);
 		});
 	}
 
@@ -219,11 +225,30 @@ export default class LocalLinter implements Linter {
 		const inner = await this.inner;
 
 		if (inner.get_dialect() !== dialect) {
+			const language = inner.get_language();
 			inner.free();
-			this.inner = this.createInner(dialect);
+			this.inner = this.createInner(dialect, language);
 		}
 
 		return Promise.resolve();
+	}
+
+	async getLanguage(): Promise<NaturalLanguage> {
+		const inner = await this.inner;
+
+		return inner.get_language();
+	}
+
+	async setLanguage(language: NaturalLanguage): Promise<void> {
+		const inner = await this.inner;
+
+		inner.set_language(language);
+	}
+
+	async detectLanguage(text: string): Promise<NaturalLanguage | undefined> {
+		const inner = await this.inner;
+
+		return inner.detect_language(text);
 	}
 
 	async summarizeStats(start?: bigint, end?: bigint): Promise<any> {

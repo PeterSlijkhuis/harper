@@ -9,12 +9,21 @@ pub struct RepeatedWords {
     /// Words that we need to make sure are detected.
     /// We use a `Vec` since there aren't a whole lot of 'em.
     special_cases: Vec<CharString>,
+    /// Words that may legitimately repeat, such as Dutch "dat dat".
+    allowed: Vec<CharString>,
 }
 impl RepeatedWords {
     pub fn new() -> Self {
         Self {
             special_cases: vec![char_string!("this")],
+            allowed: Vec::new(),
         }
+    }
+
+    /// Never flag repeats of these (lowercase) words.
+    pub fn allowing(mut self, words: &[&str]) -> Self {
+        self.allowed = words.iter().map(|w| w.chars().collect()).collect();
+        self
     }
 
     fn is_special_case(&self, chars: &[char]) -> bool {
@@ -44,6 +53,15 @@ impl Linter for RepeatedWords {
                 let word_b = document.get_span_content(&tok_b.span);
 
                 if is_informal_laughter(word_a) && is_informal_laughter(word_b) {
+                    continue;
+                }
+
+                let lower_a = word_a.to_lower();
+                if self
+                    .allowed
+                    .iter()
+                    .any(|w| w.as_slice() == lower_a.as_ref())
+                {
                     continue;
                 }
 
@@ -98,6 +116,20 @@ mod tests {
 
     use super::super::tests::assert_lint_count;
     use super::RepeatedWords;
+
+    #[test]
+    fn allowed_words_may_repeat() {
+        assert_lint_count(
+            "Ik weet dat dat zo is.",
+            RepeatedWords::default().allowing(&["dat"]),
+            0,
+        );
+        assert_lint_count(
+            "Ik ga naar de de winkel.",
+            RepeatedWords::default().allowing(&["dat"]),
+            1,
+        );
+    }
 
     #[test]
     fn catches_basic() {

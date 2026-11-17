@@ -107,6 +107,8 @@ def main(aff: str, dic: str, out: str) -> None:
             continue
         words |= expand(w, [f for f in flags if f not in drop], rules)
     words -= forbidden
+    # OpenTaal stores Dutch ij as the ligature (U+0133); people type two letters.
+    words = {w.replace("\u0133", "ij").replace("\u0132", "IJ") for w in words}
     # Drop compound-only parts, and characters the Rune word-list format reserves.
     words = {w for w in words if w and not {w[0], w[-1]} & {"-"} and "/" not in w and "#" not in w}
     Path(out).write_text(f"{len(words)}\n" + "\n".join(sorted(words)) + "\n", encoding="utf-8")

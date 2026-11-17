@@ -1,4 +1,10 @@
-import type { Dialect, LintConfig, LintOptions, StructuredLintConfig } from 'harper.js';
+import type {
+	Dialect,
+	LintConfig,
+	LintOptions,
+	NaturalLanguage,
+	StructuredLintConfig,
+} from 'harper.js';
 import type { UnpackedLintGroups } from 'lint-framework';
 
 export type Request =
@@ -9,6 +15,8 @@ export type Request =
 	| GetLintDescriptionsRequest
 	| SetDialectRequest
 	| GetDialectRequest
+	| SetLanguageRequest
+	| GetLanguageRequest
 	| GetIsolateEnglishRequest
 	| SetIsolateEnglishRequest
 	| GetOpenSuggestionsOnHoverRequest
@@ -47,6 +55,7 @@ export type Response =
 	| ClearIgnoredLintsResponse
 	| GetLintDescriptionsResponse
 	| GetDialectResponse
+	| GetLanguageResponse
 	| GetIsolateEnglishResponse
 	| GetOpenSuggestionsOnHoverResponse
 	| GetDelayResponse
@@ -136,6 +145,20 @@ export type GetLintDescriptionsRequest = {
 export type GetLintDescriptionsResponse = {
 	kind: 'getLintDescriptions';
 	descriptions: Record<string, string>;
+};
+
+export type SetLanguageRequest = {
+	kind: 'setLanguage';
+	language: NaturalLanguage;
+};
+
+export type GetLanguageRequest = {
+	kind: 'getLanguage';
+};
+
+export type GetLanguageResponse = {
+	kind: 'getLanguage';
+	language: NaturalLanguage;
 };
 
 export type GetDialectRequest = {

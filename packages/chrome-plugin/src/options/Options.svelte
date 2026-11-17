@@ -3,6 +3,7 @@ import { Button, Card, Input, Select, Textarea } from 'components';
 import {
 	Dialect,
 	type LintConfig,
+	NaturalLanguage,
 	type StructuredLintConfig,
 	type StructuredLintSetting,
 } from 'harper.js';
@@ -46,6 +47,7 @@ let searchQuery = $state('');
 let searchQueryLower = $derived(searchQuery.toLowerCase());
 let expandedGroups: Record<string, boolean> = $state({});
 let dialect = $state(Dialect.American);
+let language = $state(NaturalLanguage.English);
 let isolateEnglish = $state(false);
 let openSuggestionsOnHover = $state(false);
 let delay = $state(0);
@@ -75,6 +77,11 @@ $effect(() => {
 $effect(() => {
 	if (!loaded) return;
 	ProtocolClient.setDialect(dialect);
+});
+
+$effect(() => {
+	if (!loaded) return;
+	ProtocolClient.setLanguage(language);
 });
 
 $effect(() => {
@@ -108,6 +115,7 @@ Promise.all([
 	ProtocolClient.getStructuredLintConfig(),
 	ProtocolClient.getLintDescriptions(),
 	ProtocolClient.getDialect(),
+	ProtocolClient.getLanguage(),
 	ProtocolClient.getIsolateEnglish(),
 	ProtocolClient.getDelay(),
 	ProtocolClient.getOpenSuggestionsOnHover(),
@@ -122,6 +130,7 @@ Promise.all([
 		nextStructuredConfig,
 		nextLintDescriptions,
 		nextDialect,
+		nextLanguage,
 		nextIsolateEnglish,
 		nextDelay,
 		nextOpenSuggestionsOnHover,
@@ -135,6 +144,7 @@ Promise.all([
 		structuredLintConfig = nextStructuredConfig;
 		lintDescriptions = nextLintDescriptions;
 		dialect = nextDialect;
+		language = nextLanguage;
 		isolateEnglish = nextIsolateEnglish;
 		delay = nextDelay;
 		openSuggestionsOnHover = nextOpenSuggestionsOnHover;
@@ -497,6 +507,24 @@ async function removeWeirpack(id: string) {
             <h2 class="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-[#d1d5db]!">General</h2>
 
             <div class="divide-y divide-gray-100 dark:divide-slate-800/60">
+              <!-- Language -->
+              <div class="flex items-center justify-between gap-4 py-3.5">
+                <div class="flex flex-col">
+                  <h3 id="language-label" class="text-base font-semibold">Language</h3>
+                  <p id="language-desc" class="text-xs text-gray-600 dark:text-[#d1d5db]!">Language to check. Dutch and Spanish only check spelling and basic formatting for now.</p>
+                </div>
+                <Select
+                  size="sm"
+                  class="h-9 w-48 shrink-0 outline-none! focus:border-primary! focus:ring-0! focus-visible:ring-2! focus-visible:ring-primary!"
+                  bind:value={language}
+                  aria-labelledby="language-label" aria-describedby="language-desc"
+                >
+                  <option value={NaturalLanguage.English}>English</option>
+                  <option value={NaturalLanguage.Dutch}>Nederlands</option>
+                  <option value={NaturalLanguage.Spanish}>Español</option>
+                </Select>
+              </div>
+
               <!-- English Dialect -->
               <div class="flex items-center justify-between gap-4 py-3.5">
                 <div class="flex flex-col">

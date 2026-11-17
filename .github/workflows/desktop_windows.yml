@@ -2,10 +2,11 @@ name: Harper Desktop for Windows
 
 on:
   push:
-    branches: ["master"]
+    branches: ["master", "main", "development"]
   pull_request:
     branches: ["master"]
   merge_group:
+  workflow_dispatch:
 
 # Cancel superseded runs when a PR gets new commits, freeing runners for other
 # jobs. Non-PR runs get a unique group, so they are never queued or cancelled.

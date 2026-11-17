@@ -1,4 +1,4 @@
-import type { Dialect, Lint, Suggestion } from 'harper-wasm';
+import type { Dialect, Lint, NaturalLanguage, Suggestion } from 'harper-wasm';
 import type { BinaryModule } from './BinaryModule';
 import type { LintConfig, LintOptions, StructuredLintConfig } from './main';
 import type Summary from './Summary';
@@ -123,6 +123,15 @@ export default interface Linter {
 	/** Get the dialect of English this linter was constructed for. */
 	setDialect(dialect: Dialect): Promise<void>;
 
+	/** Get the natural language this linter checks. */
+	getLanguage(): Promise<NaturalLanguage>;
+
+	/** Switch the natural language to check. Keeps added words, configuration and ignored lints. */
+	setLanguage(language: NaturalLanguage): Promise<void>;
+
+	/** Guess whether the text is English, Dutch or Spanish. Resolves to `undefined` for anything else, and for text under three words. */
+	detectLanguage(text: string): Promise<NaturalLanguage | undefined>;
+
 	/** Summarize the linter's usage statistics.
 	 * You may optionally pass in a start and/or end time.
 	 *
@@ -156,4 +165,6 @@ export interface LinterInit {
 	binary: BinaryModule;
 	/** The dialect of English Harper should use. If omitted, Harper will default to American English. */
 	dialect?: Dialect;
+	/** The natural language Harper should check. If omitted, Harper will check English. */
+	language?: NaturalLanguage;
 }
